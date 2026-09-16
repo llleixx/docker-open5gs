@@ -47,3 +47,5 @@ Rollback: `python3 <backup>/host-rollback.py <backup>`. After commitment, use `-
 The WebUI .env mount preserves generated session/JWT keys across recreations. Login sessions can be invalidated by this version change; user accounts are retained. No additional public API or UE-IP query feature is introduced.
 
 The Dockerfiles explicitly preserve executable entrypoints, and `.gitattributes` enforces Unix script line endings for Windows clones.
+
+`host-check.py <private-output-dir>` captures a baseline/after snapshot. `host-accept.py <before-dir> <after-dir> <images.json> [explicitly-excluded-imsi ...]` compares the deployment. UE exclusions require an explicit operator/user decision and must be recorded alongside acceptance; they are never inferred automatically. `host-observe.py <output-dir> [seconds]` performs bounded read-only observation.

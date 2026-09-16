@@ -3,6 +3,7 @@
 import json,pathlib,re,subprocess,sys,urllib.request
 baseline=pathlib.Path(sys.argv[1]);current=pathlib.Path(sys.argv[2]);manifest=json.loads(pathlib.Path(sys.argv[3]).read_text())
 before=json.loads((baseline/'summary.json').read_text());after=json.loads((current/'summary.json').read_text());checks=[]
+excluded=set(sys.argv[4:]);assert excluded<=set(before['sessions']), 'Exclusions must be explicit baseline IMSIs'
 def check(name,value):
     checks.append({'check':name,'passed':bool(value)})
 def run(*args):return subprocess.check_output(args,text=True,stderr=subprocess.STDOUT)
@@ -15,8 +16,8 @@ for item in manifest:
 for name,x in old.items():
     if not name.startswith('open5gs-'):check(name+' unchanged',new[name]['id']==x['id'] and new[name]['started']==x['started'] and new[name]['running']==x['running'])
 check('accounts and subscription configuration preserved',before['db']==after['db'])
-check('all baseline sessions restored',set(before['sessions'])<=set(after['sessions']))
-responders={imsi for imsi,x in before['sessions'].items() if x['ping']}
+check('all baseline sessions restored',(set(before['sessions'])-excluded)<=set(after['sessions']))
+responders={imsi for imsi,x in before['sessions'].items() if x['ping'] and imsi not in excluded}
 check('all original ICMP responders restored',all(after['sessions'].get(imsi,{}).get('ping') for imsi in responders))
 for name in ['mptcp.txt','mptcp_limits.txt']:check(name+' unchanged',(baseline/name).read_text()==(current/name).read_text())
 check('network boundary rules unchanged',[x for x in (baseline/'iptables.txt').read_text().splitlines() if x.startswith('-A') and 'PRIV5G-BOUNDARY' in x]==[x for x in (current/'iptables.txt').read_text().splitlines() if x.startswith('-A') and 'PRIV5G-BOUNDARY' in x])
@@ -40,5 +41,5 @@ check('all monitoring targets healthy',len(targets)==3 and all(x['health']=='up'
 check('formal VPN active',run('systemctl','is-active','huizhou-access').strip()=='active')
 check('MPTCP endpoint service active',run('systemctl','is-active','priv5g-mptcp-endpoints').strip()=='active')
 (current/'checks.json').write_text(json.dumps(checks,indent=2))
-print(json.dumps({'passed':sum(x['passed'] for x in checks),'total':len(checks),'failed':[x['check'] for x in checks if not x['passed']]},indent=2))
+print(json.dumps({'passed':sum(x['passed'] for x in checks),'total':len(checks),'explicitly_excluded_ue_count':len(excluded),'failed':[x['check'] for x in checks if not x['passed']]},indent=2))
 sys.exit(0 if all(x['passed'] for x in checks) else 1)
