@@ -20,7 +20,9 @@ query='JSON.stringify({accounts:db.accounts.find().sort({_id:1}).toArray(),subsc
 data=json.loads(run('docker','exec','open5gs-db','mongosh','--quiet','open5gs','--eval',query))
 summary={'time':datetime.datetime.now(datetime.timezone.utc).isoformat(),'sessions':sessions,'containers':containers,'db':{k:{'count':len(v),'sha256':hashlib.sha256(json.dumps(v,sort_keys=True).encode()).hexdigest()} for k,v in data.items()}}
 for name,args in {'addresses':['ip','-j','addr'],'routes':['ip','-j','route','show','table','all'],'mptcp':['ip','-j','mptcp','endpoint'],'mptcp_limits':['ip','mptcp','limits','show'],'sctp':['cat','/proc/net/sctp/assocs'],'iptables':['iptables-save']}.items():(out/(name+'.txt')).write_text(run(*args))
-for name,ip in [('amf','10.33.33.9'),('smf','10.33.33.10'),('upf','10.33.33.2')]:
+for name in ['amf','smf','upf']:
+    meta=next(x for x in allcontainers if x['Name']=='/open5gs-'+name)
+    ip=meta['NetworkSettings']['Networks']['open5gs']['IPAddress']
     (out/(name+'.metrics')).write_text(metric(ip))
 (out/'summary.json').write_text(json.dumps(summary,indent=2))
 print(json.dumps({'time':summary['time'],'sessions':len(sessions),'responding':sum(answers),'db':{k:v['count'] for k,v in summary['db'].items()}}))
