@@ -1,0 +1,68 @@
+[
+  {
+    "component": "nrf",
+    "image": "ghcr.io/llleixx/open5gs-nrf:v2.8.0-r1",
+    "id": "sha256:7fdddb757961f97d5375f18462172f7ebd1555f338393e057b9a156856f0f181",
+    "version": "Open5GS v2.8.0"
+  },
+  {
+    "component": "ausf",
+    "image": "ghcr.io/llleixx/open5gs-ausf:v2.8.0-r1",
+    "id": "sha256:7b1c6982b5c1f92ab02f1767b949ce61a7b41710dd533c235d08272d34334da8",
+    "version": "Open5GS v2.8.0"
+  },
+  {
+    "component": "udm",
+    "image": "ghcr.io/llleixx/open5gs-udm:v2.8.0-r1",
+    "id": "sha256:6aafa2422dad004130732728ffdc34337d044eca4ccc4aa3740220eea3576242",
+    "version": "Open5GS v2.8.0"
+  },
+  {
+    "component": "udr",
+    "image": "ghcr.io/llleixx/open5gs-udr:v2.8.0-r1",
+    "id": "sha256:bc9f63a5dd1629af9b522a8ddd4cb07eacf04fc82be271f447e46f2ef41c5adc",
+    "version": "Open5GS v2.8.0"
+  },
+  {
+    "component": "nssf",
+    "image": "ghcr.io/llleixx/open5gs-nssf:v2.8.0-r1",
+    "id": "sha256:4a49ebce2210e7235adcc7dde4373b20f7374bfd344eab453795329ab96a4ad4",
+    "version": "Open5GS v2.8.0"
+  },
+  {
+    "component": "bsf",
+    "image": "ghcr.io/llleixx/open5gs-bsf:v2.8.0-r1",
+    "id": "sha256:53d7a70dcbda8ad8d4f28a503096ee710b4e3ef70fa68dc87d6898f90e4fc31f",
+    "version": "Open5GS v2.8.0"
+  },
+  {
+    "component": "pcf",
+    "image": "ghcr.io/llleixx/open5gs-pcf:v2.8.0-r1",
+    "id": "sha256:5f1aeac58494d7be96c724a069dc9a0d3fb75aaa04693eaf716d2dce50313bda",
+    "version": "Open5GS v2.8.0"
+  },
+  {
+    "component": "amf",
+    "image": "ghcr.io/llleixx/open5gs-amf:v2.8.0-r1",
+    "id": "sha256:68097af2ca43afac67d68527e99f2dff2d91ad809fbf65199ef4d6292d02e948",
+    "version": "Open5GS v2.8.0"
+  },
+  {
+    "component": "smf",
+    "image": "ghcr.io/llleixx/open5gs-smf:v2.8.0-r1",
+    "id": "sha256:e86b0070685f6fc59d924da1ea6a912c9640a5d4667d7bbf5b4d7c6e8e25f1e3",
+    "version": "Open5GS v2.8.0"
+  },
+  {
+    "component": "upf",
+    "image": "ghcr.io/llleixx/open5gs-upf:v2.8.0-r1",
+    "id": "sha256:38c130bde0ce911f0eb4d32314b0c84acab6910c741da1d87c6a46367624c701",
+    "version": "Open5GS v2.8.0"
+  },
+  {
+    "component": "webui",
+    "image": "ghcr.io/llleixx/open5gs-webui:v2.8.0-r1",
+    "id": "sha256:9235d592308e1d7221f849beb476886794d8cc8cf835c3fbeef23e8281b833e7",
+    "version": "v2.8.0 source commit verified during build"
+  }
+]

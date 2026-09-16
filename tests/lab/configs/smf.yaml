@@ -1,0 +1,55 @@
+logger:
+  file:
+    path: /var/log/open5gs/smf.log
+
+global:
+
+smf:
+  sbi:
+    server:
+      - address: smf.open5gs.org
+        port: 80
+    client:
+      nrf:
+        - uri: http://nrf.open5gs.org:80
+  pfcp:
+    server:
+      - address: smf.open5gs.org
+    client:
+      upf:
+        - address: upf.open5gs.org
+  gtpu:
+    server:
+      - address: smf.open5gs.org
+  session:
+    - subnet: 10.250.83.0/24
+      gateway: 10.250.83.1
+      dnn: slice1
+    - subnet: 10.250.84.0/24
+      gateway: 10.250.84.1
+      dnn: slice2
+    - subnet: 10.250.85.0/24
+      gateway: 10.250.85.1
+      dnn: slice3
+  dns:
+    - 10.250.82.53
+
+  info:
+    - s_nssai:
+        - sst: 1
+          sd: 000001
+          dnn:
+            - slice1
+        - sst: 1
+          sd: 000002
+          dnn:
+            - slice2
+        - sst: 1
+          sd: 000003
+          dnn:
+            - slice3
+
+  metrics:
+    server:
+      - address: 0.0.0.0
+        port: 9090

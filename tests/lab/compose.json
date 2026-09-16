@@ -1,0 +1,606 @@
+{
+  "name": "open5gs-v280-lab",
+  "services": {
+    "db": {
+      "command": [
+        "mongod",
+        "--bind_ip",
+        "0.0.0.0",
+        "--port",
+        "27017"
+      ],
+      "entrypoint": null,
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"
+        ],
+        "timeout": "5s",
+        "interval": "5s",
+        "retries": 30,
+        "start_period": "10s"
+      },
+      "image": "mongo@sha256:44aa79ae28ff80b56fe58681b66cda9336706df408a5175a6c04988aa54610d3",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "db.open5gs.org"
+          ]
+        }
+      },
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "lab_db",
+          "target": "/data/db"
+        }
+      ],
+      "restart": "no"
+    },
+    "nrf": {
+      "command": [
+        "-c",
+        "/etc/open5gs/custom/nrf.yaml"
+      ],
+      "entrypoint": null,
+      "image": "ghcr.io/llleixx/open5gs-nrf:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "nrf.open5gs.org"
+          ]
+        }
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//configs/nrf.yaml",
+          "target": "/etc/open5gs/custom/nrf.yaml",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ],
+      "restart": "no"
+    },
+    "ausf": {
+      "command": [
+        "-c",
+        "/etc/open5gs/custom/ausf.yaml"
+      ],
+      "depends_on": {
+        "nrf": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "image": "ghcr.io/llleixx/open5gs-ausf:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "ausf.open5gs.org"
+          ]
+        }
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//configs/ausf.yaml",
+          "target": "/etc/open5gs/custom/ausf.yaml",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ],
+      "restart": "no"
+    },
+    "udm": {
+      "command": [
+        "-c",
+        "/etc/open5gs/custom/udm.yaml"
+      ],
+      "depends_on": {
+        "nrf": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "image": "ghcr.io/llleixx/open5gs-udm:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "udm.open5gs.org"
+          ]
+        }
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//configs/udm.yaml",
+          "target": "/etc/open5gs/custom/udm.yaml",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ],
+      "restart": "no"
+    },
+    "udr": {
+      "command": [
+        "-c",
+        "/etc/open5gs/custom/udr.yaml"
+      ],
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "nrf": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "image": "ghcr.io/llleixx/open5gs-udr:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "udr.open5gs.org"
+          ]
+        }
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//configs/udr.yaml",
+          "target": "/etc/open5gs/custom/udr.yaml",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ],
+      "restart": "no"
+    },
+    "nssf": {
+      "command": [
+        "-c",
+        "/etc/open5gs/custom/nssf.yaml"
+      ],
+      "depends_on": {
+        "nrf": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "image": "ghcr.io/llleixx/open5gs-nssf:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "nssf.open5gs.org"
+          ]
+        }
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//configs/nssf.yaml",
+          "target": "/etc/open5gs/custom/nssf.yaml",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ],
+      "restart": "no"
+    },
+    "bsf": {
+      "command": [
+        "-c",
+        "/etc/open5gs/custom/bsf.yaml"
+      ],
+      "depends_on": {
+        "nrf": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "image": "ghcr.io/llleixx/open5gs-bsf:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "bsf.open5gs.org"
+          ]
+        }
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//configs/bsf.yaml",
+          "target": "/etc/open5gs/custom/bsf.yaml",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ],
+      "restart": "no"
+    },
+    "pcf": {
+      "command": [
+        "-c",
+        "/etc/open5gs/custom/pcf.yaml"
+      ],
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "nrf": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "image": "ghcr.io/llleixx/open5gs-pcf:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "pcf.open5gs.org"
+          ]
+        }
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//configs/pcf.yaml",
+          "target": "/etc/open5gs/custom/pcf.yaml",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ],
+      "restart": "no"
+    },
+    "amf": {
+      "command": [
+        "-c",
+        "/etc/open5gs/custom/amf.yaml"
+      ],
+      "depends_on": {
+        "nrf": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "image": "ghcr.io/llleixx/open5gs-amf:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "amf.open5gs.org"
+          ],
+          "ipv4_address": "10.250.80.10"
+        },
+        "ran_transport": {
+          "ipv4_address": "10.250.81.2"
+        }
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//configs/amf.yaml",
+          "target": "/etc/open5gs/custom/amf.yaml",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ],
+      "restart": "no"
+    },
+    "smf": {
+      "command": [
+        "-c",
+        "/etc/open5gs/custom/smf.yaml"
+      ],
+      "depends_on": {
+        "nrf": {
+          "condition": "service_started",
+          "required": true
+        },
+        "upf": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "image": "ghcr.io/llleixx/open5gs-smf:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "smf.open5gs.org"
+          ]
+        }
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//configs/smf.yaml",
+          "target": "/etc/open5gs/custom/smf.yaml",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ],
+      "restart": "no"
+    },
+    "upf": {
+      "cap_add": [
+        "NET_ADMIN"
+      ],
+      "command": [
+        "-c",
+        "/etc/open5gs/custom/upf.yaml"
+      ],
+      "entrypoint": [
+        "/usr/local/bin/custom-upf-entrypoint.sh"
+      ],
+      "environment": {
+        "UPF_RAN_IP": "10.250.81.3",
+        "UPF_RAN_MTU": "1600",
+        "UE_POOL_ROUTES": "10.250.83.0/24 10.250.84.0/24 10.250.85.0/24"
+      },
+      "extra_hosts": [
+        "docker-host.external-ip:10.250.81.2"
+      ],
+      "image": "ghcr.io/llleixx/open5gs-upf:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "upf.open5gs.org"
+          ]
+        },
+        "ran_transport": {
+          "ipv4_address": "10.250.81.3"
+        },
+        "service_net": {
+          "ipv4_address": "10.250.82.1"
+        }
+      },
+      "privileged": true,
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//configs/upf.yaml",
+          "target": "/etc/open5gs/custom/upf.yaml",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        },
+        {
+          "type": "bind",
+          "source": ".//upf/entrypoint.sh",
+          "target": "/usr/local/bin/custom-upf-entrypoint.sh",
+          "read_only": true,
+          "bind": {
+            "create_host_path": true
+          }
+        }
+      ],
+      "restart": "no"
+    },
+    "webui": {
+      "command": null,
+      "depends_on": {
+        "db": {
+          "condition": "service_healthy",
+          "restart": true,
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "DB_URI": "mongodb://db.open5gs.org/open5gs",
+        "HOSTNAME": "0.0.0.0",
+        "NODE_ENV": "production",
+        "PORT": "9999"
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:9999',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+        ],
+        "timeout": "3s",
+        "interval": "5s",
+        "retries": 12,
+        "start_period": "20s"
+      },
+      "image": "ghcr.io/llleixx/open5gs-webui:v2.8.0-r1",
+      "networks": {
+        "open5gs": {
+          "aliases": [
+            "webui.open5gs.org"
+          ]
+        }
+      },
+      "restart": "no",
+      "volumes": [
+        {
+          "type": "bind",
+          "source": ".//webui.env",
+          "target": "/usr/local/src/webui/.env"
+        }
+      ],
+      "ports": [
+        {
+          "target": 9999,
+          "published": "59998",
+          "host_ip": "127.0.0.1",
+          "protocol": "tcp"
+        }
+      ]
+    },
+    "ue1": {
+      "image": "ghcr.io/borjis131/ue:v3.2.7",
+      "profiles": [
+        "sim"
+      ],
+      "privileged": true,
+      "command": [
+        "-c",
+        "/UERANSIM/config/ue.yaml"
+      ],
+      "volumes": [
+        "./ue1.yaml:/UERANSIM/config/ue.yaml:ro"
+      ],
+      "networks": {
+        "ran_transport": {
+          "ipv4_address": "10.250.81.101"
+        }
+      },
+      "depends_on": [
+        "gnb"
+      ]
+    },
+    "ue2": {
+      "image": "ghcr.io/borjis131/ue:v3.2.7",
+      "profiles": [
+        "sim"
+      ],
+      "privileged": true,
+      "command": [
+        "-c",
+        "/UERANSIM/config/ue.yaml"
+      ],
+      "volumes": [
+        "./ue2.yaml:/UERANSIM/config/ue.yaml:ro"
+      ],
+      "networks": {
+        "ran_transport": {
+          "ipv4_address": "10.250.81.102"
+        }
+      },
+      "depends_on": [
+        "gnb"
+      ]
+    },
+    "ue3": {
+      "image": "ghcr.io/borjis131/ue:v3.2.7",
+      "profiles": [
+        "sim"
+      ],
+      "privileged": true,
+      "command": [
+        "-c",
+        "/UERANSIM/config/ue.yaml"
+      ],
+      "volumes": [
+        "./ue3.yaml:/UERANSIM/config/ue.yaml:ro"
+      ],
+      "networks": {
+        "ran_transport": {
+          "ipv4_address": "10.250.81.103"
+        }
+      },
+      "depends_on": [
+        "gnb"
+      ]
+    },
+    "gnb": {
+      "image": "ghcr.io/borjis131/gnb:v3.2.7",
+      "profiles": [
+        "sim"
+      ],
+      "command": [
+        "-c",
+        "/UERANSIM/config/gnb.yaml"
+      ],
+      "volumes": [
+        "./gnb.yaml:/UERANSIM/config/gnb.yaml:ro"
+      ],
+      "networks": {
+        "ran_transport": {
+          "ipv4_address": "10.250.81.200"
+        },
+        "open5gs": {}
+      },
+      "depends_on": [
+        "amf",
+        "smf",
+        "upf"
+      ]
+    },
+    "n6-test": {
+      "image": "ghcr.io/borjis131/gnb:v3.2.7",
+      "entrypoint": [
+        "/bin/sh",
+        "-c"
+      ],
+      "command": [
+        "ip addr add 10.250.82.53/24 dev eth0; ip route replace 10.250.83.0/24 via 10.250.82.1; ip route replace 10.250.84.0/24 via 10.250.82.1; ip route replace 10.250.85.0/24 via 10.250.82.1; exec sleep infinity"
+      ],
+      "cap_add": [
+        "NET_ADMIN"
+      ],
+      "networks": {
+        "service_net": {
+          "ipv4_address": "10.250.82.10"
+        }
+      }
+    }
+  },
+  "networks": {
+    "open5gs": {
+      "driver": "bridge",
+      "internal": true,
+      "ipam": {
+        "config": [
+          {
+            "subnet": "10.250.80.0/24",
+            "gateway": "10.250.80.254"
+          }
+        ]
+      }
+    },
+    "ran_transport": {
+      "driver": "bridge",
+      "internal": true,
+      "ipam": {
+        "config": [
+          {
+            "subnet": "10.250.81.0/24",
+            "gateway": "10.250.81.254"
+          }
+        ]
+      }
+    },
+    "service_net": {
+      "driver": "bridge",
+      "internal": true,
+      "ipam": {
+        "config": [
+          {
+            "subnet": "10.250.82.0/24",
+            "gateway": "10.250.82.254"
+          }
+        ]
+      }
+    }
+  },
+  "volumes": {
+    "lab_db": {}
+  }
+}

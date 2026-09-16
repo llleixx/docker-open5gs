@@ -1,0 +1,19 @@
+mcc: '460'
+mnc: '88'
+nci: '0x000000010'
+idLength: 32
+tac: 81
+linkIp: 10.250.81.200
+ngapIp: 10.250.81.200
+gtpIp: 10.250.81.200
+amfConfigs:
+- address: 10.250.81.2
+  port: 38412
+slices:
+- sst: 1
+  sd: 1
+- sst: 1
+  sd: 2
+- sst: 1
+  sd: 3
+ignoreStreamIds: true

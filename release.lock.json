@@ -1,0 +1,12 @@
+{
+  "open5gs_version": "v2.8.0",
+  "open5gs_commit": "157f611a530e292e40ec50f9d23f0ef5d4fcd6a6",
+  "upstream_builder_commit": "10295cfecb2f86f88944df1728127853eb4d6a1f",
+  "platform": "linux/amd64",
+  "bases": {
+    "ubuntu": "ubuntu:jammy@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d015063663ebafbf7",
+    "node_build": "node:20-bookworm@sha256:8f693eaa7e0a8e71560c9a82b55fd54c2ae920a2ba5d2cde28bac7d1c01c9ba5",
+    "node_runtime": "node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0"
+  },
+  "apt_mirror": "http://mirrors.ustc.edu.cn/ubuntu"
+}

@@ -1,0 +1,35 @@
+{
+  "time": "2026-09-16T15:30:55.852476+00:00",
+  "slices": [
+    {
+      "dnn": "slice1",
+      "ip": "10.250.83.4",
+      "uplink_icmp": true,
+      "downlink_icmp": true,
+      "dns": true,
+      "http": true
+    },
+    {
+      "dnn": "slice2",
+      "ip": "10.250.84.4",
+      "uplink_icmp": true,
+      "downlink_icmp": true,
+      "dns": true,
+      "http": true
+    },
+    {
+      "dnn": "slice3",
+      "ip": "10.250.85.4",
+      "uplink_icmp": true,
+      "downlink_icmp": true,
+      "dns": true,
+      "http": true
+    }
+  ],
+  "pfcp": true,
+  "nrf_registration": true,
+  "n3_mtu": 1600,
+  "no_ue_masquerade": true,
+  "webui_healthy": true,
+  "webui_secret_persistent": true
+}

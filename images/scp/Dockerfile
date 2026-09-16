@@ -1,7 +1,6 @@
-# syntax=docker/dockerfile:1
 
 # global build-time arguments for FROM statements
-ARG OPEN5GS_VERSION="v2.7.6"
+ARG OPEN5GS_VERSION="v2.8.0"
 ARG UBUNTU_VERSION="jammy"
 
 FROM base-open5gs:${OPEN5GS_VERSION} AS builder
@@ -9,10 +8,12 @@ FROM base-open5gs:${OPEN5GS_VERSION} AS builder
 FROM ubuntu:${UBUNTU_VERSION}
 
 # build-time arguments
+ARG UBUNTU_MIRROR=http://archive.ubuntu.com/ubuntu
 ARG DEBIAN_FRONTEND="noninteractive"
 
 # install dependencies
-RUN apt-get update && apt-get install libgnutls28-dev libgcrypt-dev libtalloc-dev \
+RUN sed -i "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g; s|http://security.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g" /etc/apt/sources.list \
+    && apt-get update && apt-get install libgnutls28-dev libgcrypt-dev libtalloc-dev \
     libnghttp2-dev libmicrohttpd-dev libcurl4-gnutls-dev libyaml-dev -y
 
 # copy executable, default config and libs

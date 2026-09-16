@@ -1,7 +1,6 @@
-# syntax=docker/dockerfile:1
 
 # global build-time arguments for FROM statements
-ARG OPEN5GS_VERSION="v2.7.6"
+ARG OPEN5GS_VERSION="v2.8.0"
 ARG UBUNTU_VERSION="jammy"
 
 FROM base-open5gs:${OPEN5GS_VERSION} AS builder
@@ -12,11 +11,13 @@ FROM ubuntu:${UBUNTU_VERSION}
 ARG TARGETARCH
 
 # build-time arguments
+ARG UBUNTU_MIRROR=http://archive.ubuntu.com/ubuntu
 ARG DEBIAN_FRONTEND="noninteractive"
 ARG YQ_VERSION="v4.30.6"
 
 # install dependencies
-RUN apt-get update && apt-get install libssl-dev libtalloc-dev libtins-dev \
+RUN sed -i "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g; s|http://security.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g" /etc/apt/sources.list \
+    && apt-get update && apt-get install libssl-dev libtalloc-dev libtins-dev \
     libyaml-dev iproute2 iptables wget libmicrohttpd-dev -y
 
 # install yq
@@ -35,7 +36,7 @@ RUN ldconfig
 
 # copy helper_functions and entrypoint scripts
 COPY ./helper_functions.sh /usr/local/bin/helper_functions.sh
-COPY ./entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=755 ./entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # create directory to store the logs
 RUN mkdir -p /var/log/open5gs/

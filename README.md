@@ -1,3 +1,8 @@
+# Personal Open5GS image maintenance
+
+This fork maintains the pinned v2.8.0 release for `ghcr.io/llleixx/open5gs-<nf>:v2.8.0-r1`.
+Start with [the release guide](docs/release-v2.8.0.md). The upstream deployment examples below remain reference examples; the release scripts provide the personal image names and fixed source commit. No registry publication happens automatically.
+
 # Open5GS 5G Core in Docker
 
 [Open5GS](https://github.com/open5gs/open5gs) 5G Core Network Functions images ready for Docker.
