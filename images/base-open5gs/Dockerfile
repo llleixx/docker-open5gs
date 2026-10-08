@@ -23,6 +23,17 @@ RUN sed -i "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g; s|http://secu
 RUN git clone --depth 1 --branch=${OPEN5GS_VERSION} https://github.com/open5gs/open5gs \
     && test "$(git -C open5gs rev-parse HEAD)" = "${OPEN5GS_COMMIT}"
 
+# Optional audited patchset. Empty preserves the original release.
+ARG OPEN5GS_PATCHSET=""
+COPY patches/ /tmp/open5gs-patches/
+RUN if [ -n "${OPEN5GS_PATCHSET}" ]; then \
+      test "${OPEN5GS_PATCHSET}" = "dscp-ul1" && \
+      cd /tmp/open5gs-patches && sha256sum -c SHA256SUMS && \
+      cd /open5gs && git apply --check /tmp/open5gs-patches/dscp-ul1.patch && \
+      git apply /tmp/open5gs-patches/dscp-ul1.patch; fi
+
 # install open5gs
 RUN cd open5gs && meson build --prefix=`pwd`/install && ninja -j ${BUILD_JOBS} -C build \
     && cd build && ninja install
+
+RUN if [ "${OPEN5GS_PATCHSET}" = "dscp-ul1" ]; then meson test -C /open5gs/build --suite unit --print-errorlogs; fi

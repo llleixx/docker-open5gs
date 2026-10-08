@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/llleixx/open5gs",
+  "branch": "feature/dscp-uplink",
+  "commit": "3c518e4aacece10fbf08f6a5feea8394d9f669e7",
+  "baseline": "157f611a530e292e40ec50f9d23f0ef5d4fcd6a6",
+  "patch_sha256": "cc7aec461dc9a78f23acbaca84ae09e2e6c4b36e60fffcd8a54121070483897c",
+  "note": "Existing images predate this Git commit; their audited patch bytes exactly equal this commit's diff against the baseline."
+}

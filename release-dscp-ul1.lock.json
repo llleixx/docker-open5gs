@@ -1,0 +1,6 @@
+{
+  "base-open5gs:v2.8.0": "sha256:d7d7bd8e40b845942259ba1704d1192608f8219ab5368526e32fdac140654e2c",
+  "ghcr.io/llleixx/open5gs-pcf:v2.8.0-r1": "sha256:5f1aeac58494d7be96c724a069dc9a0d3fb75aaa04693eaf716d2dce50313bda",
+  "ghcr.io/llleixx/open5gs-smf:v2.8.0-r1": "sha256:e86b0070685f6fc59d924da1ea6a912c9640a5d4667d7bbf5b4d7c6e8e25f1e3",
+  "ghcr.io/llleixx/open5gs-upf:v2.8.0-r1": "sha256:38c130bde0ce911f0eb4d32314b0c84acab6910c741da1d87c6a46367624c701"
+}

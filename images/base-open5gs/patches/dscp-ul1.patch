@@ -1,0 +1,763 @@
+diff --git a/lib/app/ogs-config.c b/lib/app/ogs-config.c
+index 57da49c..0f16537 100644
+--- a/lib/app/ogs-config.c
++++ b/lib/app/ogs-config.c
+@@ -1205,6 +1205,15 @@ int ogs_app_parse_session_conf(
+                                                 return OGS_ERROR;
+                                             }
+                                         }
++                                    } else if (!strcmp(flow_key,
++                                                "tos_traffic_class")) {
++                                        if (ogs_flow_parse_tos(
++                                                ogs_yaml_iter_value(&flow_iter),
++                                                &flow->tos_traffic_class) != OGS_OK) {
++                                            ogs_error("Invalid tos_traffic_class; expected four hex digits and nonzero mask");
++                                            return OGS_ERROR;
++                                        }
++                                        flow->tos_traffic_class_presence = true;
+                                     } else if (!strcmp(flow_key,
+                                         OGS_DESCRIPTION_STRING)) {
+                                         const char *v =
+diff --git a/lib/ipfw/ogs-ipfw.c b/lib/ipfw/ogs-ipfw.c
+index d555410..139836e 100644
+--- a/lib/ipfw/ogs-ipfw.c
++++ b/lib/ipfw/ogs-ipfw.c
+@@ -601,6 +601,13 @@ void ogs_pf_content_from_ipfw_rule(
+         }
+     }
+ 
++    if (rule->tos_traffic_class_presence) {
++        ogs_assert(j < OGS_MAX_NUM_OF_PACKET_FILTER_COMPONENT);
++        content->component[j].type = OGS_PACKET_FILTER_TOS_TRAFFIC_CLASS_TYPE;
++        content->component[j].tos.value = rule->tos_traffic_class >> 8;
++        content->component[j].tos.mask = rule->tos_traffic_class & 0xff;
++        j++; len += 3;
++    }
+     content->num_of_component = j;
+     content->length = len;
+ }
+diff --git a/lib/ipfw/ogs-ipfw.h b/lib/ipfw/ogs-ipfw.h
+index 80367a0..c091635 100644
+--- a/lib/ipfw/ogs-ipfw.h
++++ b/lib/ipfw/ogs-ipfw.h
+@@ -55,6 +55,7 @@ typedef struct ogs_ipfw_rule_s {
+         } dst;
+     } port;
+ 
++    bool tos_traffic_class_presence;
+     uint16_t tos_traffic_class;
+     uint32_t security_parameter_index;
+     uint32_t flow_label; /* 24bit */
+@@ -108,6 +109,7 @@ typedef struct ogs_pf_content_s {
+         uint8_t type;
+         union {
+             uint8_t proto;
++            struct { uint8_t value; uint8_t mask; } tos;
+             struct {
+                 uint32_t addr;
+                 uint32_t mask;
+diff --git a/lib/nas/5gs/types.c b/lib/nas/5gs/types.c
+index 4eb990c..fae79f7 100644
+--- a/lib/nas/5gs/types.c
++++ b/lib/nas/5gs/types.c
+@@ -752,6 +752,11 @@ int ogs_nas_build_qos_rules(ogs_nas_qos_rules_t *rules,
+                     length += sizeof(
+                             target.pf[j].content.component[k].ipv6_mask.mask);
+                     break;
++                case OGS_PACKET_FILTER_TOS_TRAFFIC_CLASS_TYPE:
++                    ogs_assert(length + 2 <= OGS_NAS_MAX_QOS_RULES_LEN);
++                    buffer[length++] = target.pf[j].content.component[k].tos.value;
++                    buffer[length++] = target.pf[j].content.component[k].tos.mask;
++                    break;
+                 case OGS_PACKET_FILTER_SINGLE_LOCAL_PORT_TYPE:
+                 case OGS_PACKET_FILTER_SINGLE_REMOTE_PORT_TYPE:
+                     ogs_assert(length +
+@@ -962,6 +967,11 @@ static int parse_qos_rules_packet_filter_list(
+                     sizeof(rule->pf[i].content.component[j].ipv6_mask.mask));
+                 len += sizeof(rule->pf[i].content.component[j].ipv6_mask.mask);
+                 break;
++            case OGS_PACKET_FILTER_TOS_TRAFFIC_CLASS_TYPE:
++                CHECK_PF_CONTENT_ROOM(2);
++                rule->pf[i].content.component[j].tos.value = buffer[size+len++];
++                rule->pf[i].content.component[j].tos.mask = buffer[size+len++];
++                break;
+             case OGS_PACKET_FILTER_SINGLE_LOCAL_PORT_TYPE:
+             case OGS_PACKET_FILTER_SINGLE_REMOTE_PORT_TYPE:
+                 CHECK_PF_CONTENT_ROOM(
+diff --git a/lib/pfcp/build.c b/lib/pfcp/build.c
+index 9d81e83..35d613d 100644
+--- a/lib/pfcp/build.c
++++ b/lib/pfcp/build.c
+@@ -335,6 +335,10 @@ void ogs_pfcp_build_create_pdr(
+                     strlen(pdr->flow[j].description);
+             pfcp_sdf_filter[j].flow_description = pdr->flow[j].description;
+         }
++        if (pdr->flow[j].ttc) {
++            pfcp_sdf_filter[j].ttc = 1;
++            pfcp_sdf_filter[j].tos_traffic_class = pdr->flow[j].tos_traffic_class;
++        }
+         if (pdr->flow[j].bid) {
+             pfcp_sdf_filter[j].bid = 1;
+             pfcp_sdf_filter[j].sdf_filter_id = pdr->flow[j].sdf_filter_id;
+@@ -482,6 +486,10 @@ void ogs_pfcp_build_update_pdr(
+                         strlen(pdr->flow[j].description);
+                 pfcp_sdf_filter[j].flow_description = pdr->flow[j].description;
+             }
++            if (pdr->flow[j].ttc) {
++                pfcp_sdf_filter[j].ttc = 1;
++                pfcp_sdf_filter[j].tos_traffic_class = pdr->flow[j].tos_traffic_class;
++            }
+             if (pdr->flow[j].bid) {
+                 pfcp_sdf_filter[j].bid = 1;
+                 pfcp_sdf_filter[j].sdf_filter_id = pdr->flow[j].sdf_filter_id;
+diff --git a/lib/pfcp/context.h b/lib/pfcp/context.h
+index c29b73b..2b0b436 100644
+--- a/lib/pfcp/context.h
++++ b/lib/pfcp/context.h
+@@ -210,6 +210,7 @@ typedef struct ogs_pfcp_pdr_s {
+             uint8_t flags;
+         };
+         char *description;
++        uint16_t tos_traffic_class;
+         uint32_t sdf_filter_id;
+     } flow[OGS_MAX_NUM_OF_FLOW_IN_PDR];;
+ 
+diff --git a/lib/pfcp/handler.c b/lib/pfcp/handler.c
+index 82e3835..533b2a9 100644
+--- a/lib/pfcp/handler.c
++++ b/lib/pfcp/handler.c
+@@ -609,6 +609,10 @@ ogs_pfcp_pdr_t *ogs_pfcp_handle_create_pdr(ogs_pfcp_sess_t *sess,
+             if (pdr->src_if == OGS_PFCP_INTERFACE_ACCESS)
+                 ogs_ipfw_rule_swap(&rule->ipfw);
+         }
++        if (sdf_filter.ttc) {
++            rule->ipfw.tos_traffic_class_presence = true;
++            rule->ipfw.tos_traffic_class = sdf_filter.tos_traffic_class;
++        }
+     }
+ 
+     if (pdr->dnn) {
+@@ -999,6 +1003,10 @@ ogs_pfcp_pdr_t *ogs_pfcp_handle_update_pdr(ogs_pfcp_sess_t *sess,
+                 if (pdr->src_if == OGS_PFCP_INTERFACE_ACCESS)
+                     ogs_ipfw_rule_swap(&rule->ipfw);
+             }
++            if (sdf_filter.ttc) {
++                rule->ipfw.tos_traffic_class_presence = true;
++                rule->ipfw.tos_traffic_class = sdf_filter.tos_traffic_class;
++            }
+         }
+ 
+         if (message->pdi.network_instance.presence) {
+diff --git a/lib/pfcp/rule-match.c b/lib/pfcp/rule-match.c
+index 2e35d74..214704a 100644
+--- a/lib/pfcp/rule-match.c
++++ b/lib/pfcp/rule-match.c
+@@ -348,6 +348,13 @@ ogs_pfcp_rule_t *ogs_pfcp_pdr_rule_find_by_packet(
+ 
+         ipfw = &rule->ipfw;
+         ogs_assert(ipfw);
++        if (ipfw->tos_traffic_class_presence) {
++            uint8_t actual = ip_v == 4 ? ip_h->ip_tos :
++                (be32toh(ip6_h->ip6_flow) >> 20) & 0xff;
++            uint8_t mask = ipfw->tos_traffic_class & 0xff;
++            uint8_t value = ipfw->tos_traffic_class >> 8;
++            if ((actual & mask) != (value & mask)) continue;
++        }
+ 
+         ogs_trace("PROTO:%d SRC:%08x %08x %08x %08x",
+                 proto, be32toh(src_addr[0]), be32toh(src_addr[1]),
+diff --git a/lib/pfcp/types.c b/lib/pfcp/types.c
+index 04b0c6d..a58382a 100644
+--- a/lib/pfcp/types.c
++++ b/lib/pfcp/types.c
+@@ -209,7 +209,7 @@ int16_t ogs_pfcp_parse_sdf_filter(
+         memcpy(&filter->tos_traffic_class,
+                 (unsigned char *)octet->data + size,
+                 sizeof(filter->tos_traffic_class));
+-        filter->tos_traffic_class = be32toh(filter->tos_traffic_class);
++        filter->tos_traffic_class = be16toh(filter->tos_traffic_class);
+         size += sizeof(filter->tos_traffic_class);
+     }
+ 
+diff --git a/lib/proto/types.h b/lib/proto/types.h
+index 6214d3e..bfb0df7 100644
+--- a/lib/proto/types.h
++++ b/lib/proto/types.h
+@@ -547,8 +547,30 @@ int ogs_check_qos_conf(ogs_qos_t *qos);
+ typedef struct ogs_flow_s {
+     uint8_t direction;
+     char *description;
++    bool tos_traffic_class_presence;
++    uint16_t tos_traffic_class; /* host order: value in high byte, mask in low */
+ } ogs_flow_t;
+ 
++/* TS 29.212 / 29.512: exactly two hexadecimal octets, value then mask. */
++static inline int ogs_flow_parse_tos(const char *text, uint16_t *out)
++{
++    unsigned value = 0;
++    int i;
++    if (!text || strlen(text) != 4 || !out) return OGS_ERROR;
++    for (i = 0; i < 4; i++) {
++        unsigned n;
++        if (text[i] >= '0' && text[i] <= '9') n = text[i] - '0';
++        else if (text[i] >= 'a' && text[i] <= 'f') n = text[i] - 'a' + 10;
++        else if (text[i] >= 'A' && text[i] <= 'F') n = text[i] - 'A' + 10;
++        else return OGS_ERROR;
++        value = (value << 4) | n;
++    }
++    /* A zero mask silently widens a requested classification to all DSCPs. */
++    if (!(value & 0xff)) return OGS_ERROR;
++    *out = value;
++    return OGS_OK;
++}
++
+ #define OGS_FLOW_FREE(__fLOW) \
+     do { \
+         if ((__fLOW)->description) { \
+@@ -600,6 +622,10 @@ typedef struct ogs_pcc_rule_s {
+         for (__iNDEX = 0; __iNDEX < (__sRC)->num_of_flow; __iNDEX++) { \
+             (__dST)->flow[__iNDEX].direction = \
+                 (__sRC)->flow[__iNDEX].direction; \
++            (__dST)->flow[__iNDEX].tos_traffic_class_presence = \
++                (__sRC)->flow[__iNDEX].tos_traffic_class_presence; \
++            (__dST)->flow[__iNDEX].tos_traffic_class = \
++                (__sRC)->flow[__iNDEX].tos_traffic_class; \
+             (__dST)->flow[__iNDEX].description = \
+                 ogs_strdup((__sRC)->flow[__iNDEX].description);  \
+             ogs_assert((__dST)->flow[__iNDEX].description); \
+diff --git a/lib/sbi/conv.c b/lib/sbi/conv.c
+index 4e7942b..5f7df16 100644
+--- a/lib/sbi/conv.c
++++ b/lib/sbi/conv.c
+@@ -1533,6 +1533,11 @@ OpenAPI_pcc_rule_t *ogs_sbi_build_pcc_rule(
+ 
+             ogs_assert(flow->description);
+             FlowInformation->flow_description = flow->description;
++            if (flow->tos_traffic_class_presence) {
++                FlowInformation->tos_traffic_class =
++                    ogs_msprintf("%04x", flow->tos_traffic_class);
++                ogs_assert(FlowInformation->tos_traffic_class);
++            }
+ 
+             OpenAPI_list_add(FlowInformationList, FlowInformation);
+         }
+@@ -1558,7 +1563,11 @@ void ogs_sbi_free_pcc_rule(OpenAPI_pcc_rule_t *PccRule)
+     if (PccRule->flow_infos) {
+         OpenAPI_list_for_each(PccRule->flow_infos, node) {
+             FlowInformation = node->data;
+-            if (FlowInformation) ogs_free(FlowInformation);
++            if (FlowInformation) {
++                if (FlowInformation->tos_traffic_class)
++                    ogs_free(FlowInformation->tos_traffic_class);
++                ogs_free(FlowInformation);
++            }
+         }
+         OpenAPI_list_free(PccRule->flow_infos);
+     }
+diff --git a/src/smf/binding.c b/src/smf/binding.c
+index 6bbede0..10d396c 100644
+--- a/src/smf/binding.c
++++ b/src/smf/binding.c
+@@ -267,7 +267,8 @@ void smf_bearer_binding(smf_sess_t *sess)
+                  * duplicated flows are not added
+                  */
+                 if (smf_pf_find_by_flow(
+-                    bearer, flow->direction, flow->description) != NULL) {
++                    bearer, flow->direction, flow->description,
++                    flow->tos_traffic_class_presence, flow->tos_traffic_class) != NULL) {
+                     continue;
+                 }
+ 
+@@ -306,6 +307,8 @@ void smf_bearer_binding(smf_sess_t *sess)
+  */
+                 if (flow->direction == OGS_FLOW_UPLINK_ONLY)
+                     ogs_ipfw_rule_swap(&pf->ipfw_rule);
++                pf->ipfw_rule.tos_traffic_class_presence = flow->tos_traffic_class_presence;
++                pf->ipfw_rule.tos_traffic_class = flow->tos_traffic_class;
+ 
+                 if (rv != OGS_OK) {
+                     ogs_error("Invalid Flow-Description[%s]",
+@@ -516,6 +519,7 @@ void smf_qos_flow_binding(smf_sess_t *sess)
+ 
+             bool qos_flow_created = false;
+             bool qos_presence = false;
++            bool replace_filters = false;
+ 
+             qos_flow = smf_qos_flow_find_by_pcc_rule_id(sess, pcc_rule->id);
+             if (!qos_flow) {
+@@ -576,6 +580,7 @@ void smf_qos_flow_binding(smf_sess_t *sess)
+                     ul_pdr->f_teid.teid = sess->local_ul_teid;
+                 }
+ 
++                qos_flow->pcc_rule.precedence = pcc_rule->precedence;
+                 qos_flow->pcc_rule.id = ogs_strdup(pcc_rule->id);
+                 ogs_assert(qos_flow->pcc_rule.id);
+ 
+@@ -626,6 +631,29 @@ void smf_qos_flow_binding(smf_sess_t *sess)
+          * EPC: OGS_GTP2_TFT_CODE_ADD_PACKET_FILTERS_TO_EXISTING_TFT
+          * 5GC: OGS_NAS_QOS_CODE_MODIFY_EXISTING_QOS_RULE_AND_ADD_PACKET_FILTERS
+          */
++            /* DSCP policy changes replace the filter set, otherwise an old
++             * wider filter could continue to match after an update. */
++            if (!qos_flow_created) {
++                bool has_tos = false, changed = false;
++                smf_pf_t *existing;
++                ogs_list_for_each(&qos_flow->pf_list, existing)
++                    if (existing->ipfw_rule.tos_traffic_class_presence)
++                        has_tos = true;
++                for (j = 0; j < pcc_rule->num_of_flow; j++) {
++                    ogs_flow_t *flow = &pcc_rule->flow[j];
++                    if (flow->tos_traffic_class_presence) has_tos = true;
++                    if (!smf_pf_find_by_flow(qos_flow, flow->direction,
++                            flow->description, flow->tos_traffic_class_presence,
++                            flow->tos_traffic_class)) changed = true;
++                }
++                if (ogs_list_count(&qos_flow->pf_list) != pcc_rule->num_of_flow)
++                    changed = true;
++                if (has_tos && changed && pcc_rule->num_of_flow) {
++                    smf_pf_remove_all(qos_flow);
++                    replace_filters = true;
++                }
++                qos_flow->pcc_rule.precedence = pcc_rule->precedence;
++            }
+             ogs_list_init(&qos_flow->pf_to_add_list);
+ 
+             for (j = 0; j < pcc_rule->num_of_flow; j++) {
+@@ -645,7 +673,8 @@ void smf_qos_flow_binding(smf_sess_t *sess)
+                  * duplicated flows are not added
+                  */
+                 if (smf_pf_find_by_flow(
+-                    qos_flow, flow->direction, flow->description) != NULL) {
++                    qos_flow, flow->direction, flow->description,
++                    flow->tos_traffic_class_presence, flow->tos_traffic_class) != NULL) {
+                     continue;
+                 }
+ 
+@@ -684,6 +713,8 @@ void smf_qos_flow_binding(smf_sess_t *sess)
+  */
+                 if (flow->direction == OGS_FLOW_UPLINK_ONLY)
+                     ogs_ipfw_rule_swap(&pf->ipfw_rule);
++                pf->ipfw_rule.tos_traffic_class_presence = flow->tos_traffic_class_presence;
++                pf->ipfw_rule.tos_traffic_class = flow->tos_traffic_class;
+ 
+                 if (rv != OGS_OK) {
+                     ogs_error("Invalid Flow-Description[%s]",
+@@ -722,7 +753,8 @@ void smf_qos_flow_binding(smf_sess_t *sess)
+                 pfcp_flags |= OGS_PFCP_MODIFY_NETWORK_REQUESTED;
+ 
+                 if (ogs_list_count(&qos_flow->pf_to_add_list) > 0) {
+-                    pfcp_flags |= OGS_PFCP_MODIFY_TFT_ADD;
++                    pfcp_flags |= replace_filters ?
++                        OGS_PFCP_MODIFY_TFT_REPLACE : OGS_PFCP_MODIFY_TFT_ADD;
+                     smf_bearer_tft_update(qos_flow);
+                 }
+                 if (qos_presence == true) {
+@@ -754,6 +786,18 @@ void smf_qos_flow_binding(smf_sess_t *sess)
+         }
+     }
+ 
++    /* One NAS operation code is shared by this batch: when replacing,
++     * include every current filter for all affected flows. */
++    if (pfcp_flags & OGS_PFCP_MODIFY_TFT_REPLACE) {
++        smf_bearer_t *flow;
++        smf_pf_t *pf;
++        pfcp_flags &= ~OGS_PFCP_MODIFY_TFT_ADD;
++        ogs_list_for_each_entry(&sess->qos_flow_to_modify_list, flow, to_modify_node) {
++            ogs_list_init(&flow->pf_to_add_list);
++            ogs_list_for_each(&flow->pf_list, pf)
++                ogs_list_add(&flow->pf_to_add_list, &pf->to_add_node);
++        }
++    }
+     check = pfcp_flags & (OGS_PFCP_MODIFY_CREATE|OGS_PFCP_MODIFY_REMOVE);
+     if (check != 0 &&
+         check != OGS_PFCP_MODIFY_CREATE && check != OGS_PFCP_MODIFY_REMOVE) {
+diff --git a/src/smf/context.c b/src/smf/context.c
+index 96516af..f3e7fe7 100644
+--- a/src/smf/context.c
++++ b/src/smf/context.c
+@@ -3076,22 +3076,36 @@ void smf_bearer_tft_update(smf_bearer_t *bearer)
+ 
+     dl_pdr->num_of_flow = 0;
+     ul_pdr->num_of_flow = 0;
++    memset(dl_pdr->flow, 0, sizeof(dl_pdr->flow));
++    memset(ul_pdr->flow, 0, sizeof(ul_pdr->flow));
+ 
+     ogs_list_for_each(&bearer->pf_list, pf) {
+         if (pf->direction == OGS_FLOW_DOWNLINK_ONLY) {
+             dl_pdr->flow[dl_pdr->num_of_flow].fd = 1;
+             dl_pdr->flow[dl_pdr->num_of_flow].description =
+                 pf->flow_description;
++            dl_pdr->flow[dl_pdr->num_of_flow].ttc =
++                pf->ipfw_rule.tos_traffic_class_presence;
++            dl_pdr->flow[dl_pdr->num_of_flow].tos_traffic_class =
++                pf->ipfw_rule.tos_traffic_class;
+             dl_pdr->num_of_flow++;
+         } else if (pf->direction == OGS_FLOW_UPLINK_ONLY) {
+             ul_pdr->flow[ul_pdr->num_of_flow].fd = 1;
+             ul_pdr->flow[ul_pdr->num_of_flow].description =
+                 pf->flow_description;
++            ul_pdr->flow[ul_pdr->num_of_flow].ttc =
++                pf->ipfw_rule.tos_traffic_class_presence;
++            ul_pdr->flow[ul_pdr->num_of_flow].tos_traffic_class =
++                pf->ipfw_rule.tos_traffic_class;
+             ul_pdr->num_of_flow++;
+         } else if (pf->direction == OGS_FLOW_BIDIRECTIONAL) {
+             dl_pdr->flow[dl_pdr->num_of_flow].fd = 1;
+             dl_pdr->flow[dl_pdr->num_of_flow].description =
+                 pf->flow_description;
++            dl_pdr->flow[dl_pdr->num_of_flow].ttc =
++                pf->ipfw_rule.tos_traffic_class_presence;
++            dl_pdr->flow[dl_pdr->num_of_flow].tos_traffic_class =
++                pf->ipfw_rule.tos_traffic_class;
+             dl_pdr->flow[dl_pdr->num_of_flow].bid = 1;
+             dl_pdr->flow[dl_pdr->num_of_flow].sdf_filter_id = pf->sdf_filter_id;
+             dl_pdr->num_of_flow++;
+@@ -3103,6 +3117,14 @@ void smf_bearer_tft_update(smf_bearer_t *bearer)
+             ogs_assert_if_reached();
+         }
+     }
++    /* An unfiltered dedicated downlink PDR must not capture default traffic.
++     * Keep it lower priority than the default PDR for UL-only policies. */
++    if (bearer->qfi && bearer->pcc_rule.id) {
++        dl_pdr->precedence = dl_pdr->num_of_flow ? bearer->pcc_rule.precedence :
++            OGS_PFCP_DEFAULT_PDR_PRECEDENCE + 1;
++        ul_pdr->precedence = ul_pdr->num_of_flow ? bearer->pcc_rule.precedence :
++            OGS_PFCP_DEFAULT_PDR_PRECEDENCE + 1;
++    }
+ }
+ 
+ void smf_bearer_qos_update(smf_bearer_t *bearer)
+@@ -3261,12 +3283,15 @@ smf_pf_t *smf_pf_find_by_identifier(
+ }
+ 
+ smf_pf_t *smf_pf_find_by_flow(
+-    smf_bearer_t *bearer, uint8_t direction, char *flow_description)
++    smf_bearer_t *bearer, uint8_t direction, char *flow_description,
++    bool tos_presence, uint16_t tos)
+ {
+     smf_pf_t *pf = NULL;
+ 
+     ogs_list_for_each(&bearer->pf_list, pf) {
+         if ((pf->direction == direction) &&
++            pf->ipfw_rule.tos_traffic_class_presence == tos_presence &&
++            (!tos_presence || pf->ipfw_rule.tos_traffic_class == tos) &&
+             (!strcmp(pf->flow_description, flow_description))) {
+             return pf;
+         }
+diff --git a/src/smf/context.h b/src/smf/context.h
+index 54736a6..425bf2e 100644
+--- a/src/smf/context.h
++++ b/src/smf/context.h
+@@ -262,6 +262,7 @@ typedef struct smf_bearer_s {
+     struct {
+         char        *name;          /* EPC: PCC Rule Name */
+         char        *id;            /* 5GC: PCC Rule Id */
++        uint32_t    precedence;
+     } pcc_rule;
+     ogs_qos_t       qos;            /* QoS Information */
+ 
+@@ -803,7 +804,8 @@ void smf_pf_remove_all(smf_bearer_t *bearer);
+ smf_pf_t *smf_pf_find_by_identifier(
+         smf_bearer_t *bearer, uint8_t identifier);
+ smf_pf_t *smf_pf_find_by_flow(
+-    smf_bearer_t *bearer, uint8_t direction, char *flow_description);
++    smf_bearer_t *bearer, uint8_t direction, char *flow_description,
++    bool tos_presence, uint16_t tos);
+ smf_pf_t *smf_pf_first(smf_bearer_t *bearer);
+ smf_pf_t *smf_pf_next(smf_pf_t *pf);
+ 
+diff --git a/src/smf/gsm-build.c b/src/smf/gsm-build.c
+index 18d9637..d290299 100644
+--- a/src/smf/gsm-build.c
++++ b/src/smf/gsm-build.c
+@@ -798,7 +798,10 @@ void gsm_encode_qos_rule(
+         qos_rule_code != OGS_NAS_QOS_CODE_MODIFY_EXISTING_QOS_RULE_AND_DELETE_PACKET_FILTERS &&
+         qos_rule_code != OGS_NAS_QOS_CODE_MODIFY_EXISTING_QOS_RULE_WITHOUT_MODIFYING_PACKET_FILTERS)
+     {
+-        qos_rule->precedence = dl_pdr->precedence;
++        /* NAS precedence is independent of the unused-direction PDR fallback.
++         * A PFCP value of 65536 truncates to zero in this 8-bit NAS field. */
++        qos_rule->precedence = qos_flow->pcc_rule.id ?
++            qos_flow->pcc_rule.precedence : dl_pdr->precedence;
+         qos_rule->flow.segregation = 0;
+         qos_rule->flow.identifier = qos_flow->qfi;
+     }
+diff --git a/src/smf/npcf-handler.c b/src/smf/npcf-handler.c
+index c54347d..3f84527 100644
+--- a/src/smf/npcf-handler.c
++++ b/src/smf/npcf-handler.c
+@@ -25,7 +25,7 @@
+ 
+ #include "npcf-handler.h"
+ 
+-static void update_authorized_pcc_rule_and_qos(
++static bool update_authorized_pcc_rule_and_qos(
+         smf_sess_t *sess, OpenAPI_sm_policy_decision_t *SmPolicyDecision)
+ {
+     OpenAPI_lnode_t *node = NULL, *node2 = NULL;
+@@ -93,6 +93,21 @@ static void update_authorized_pcc_rule_and_qos(
+         char *QosId = NULL;
+         int i;
+ 
++        /* Validate the whole decision before replacing any existing policy. */
++        OpenAPI_list_for_each(SmPolicyDecision->pcc_rules, node) {
++            OpenAPI_map_t *map = node->data;
++            OpenAPI_pcc_rule_t *rule = map ? map->value : NULL;
++            if (!rule || !rule->flow_infos) continue;
++            OpenAPI_list_for_each(rule->flow_infos, node2) {
++                OpenAPI_flow_information_t *info = node2->data;
++                uint16_t value;
++                if (info && info->tos_traffic_class &&
++                    ogs_flow_parse_tos(info->tos_traffic_class, &value) != OGS_OK) {
++                    ogs_error("Invalid PCC tosTrafficClass");
++                    return false;
++                }
++            }
++        }
+         for (i = 0; i < sess->policy.num_of_pcc_rule; i++)
+             OGS_PCC_RULE_FREE(&sess->policy.pcc_rule[i]);
+         sess->policy.num_of_pcc_rule = 0;
+@@ -240,6 +255,13 @@ static void update_authorized_pcc_rule_and_qos(
+                         ogs_strdup(FlowInformation->flow_description);
+                     ogs_assert(flow->description);
+ 
++                    flow->tos_traffic_class_presence =
++                        FlowInformation->tos_traffic_class != NULL;
++                    flow->tos_traffic_class = 0;
++                    if (flow->tos_traffic_class_presence)
++                        ogs_assert(ogs_flow_parse_tos(
++                            FlowInformation->tos_traffic_class,
++                            &flow->tos_traffic_class) == OGS_OK);
+                     pcc_rule->num_of_flow++;
+                 }
+             }
+@@ -315,6 +337,7 @@ static void update_authorized_pcc_rule_and_qos(
+             sess->policy.num_of_pcc_rule++;
+         }
+     }
++    return true;
+ }
+ 
+ bool smf_npcf_smpolicycontrol_handle_create(
+@@ -525,7 +548,8 @@ bool smf_npcf_smpolicycontrol_handle_create(
+     }
+ 
+     /* Update authorized PCC rule & QoS */
+-    update_authorized_pcc_rule_and_qos(sess, SmPolicyDecision);
++    if (!update_authorized_pcc_rule_and_qos(sess, SmPolicyDecision))
++        return false;
+ 
+     /*********************************************************************
+      * Send PFCP Session Establiashment Request to the UPF
+@@ -785,7 +809,10 @@ bool smf_npcf_smpolicycontrol_handle_update_notify(
+     }
+ 
+     /* Update authorized PCC rule & QoS */
+-    update_authorized_pcc_rule_and_qos(sess, SmPolicyDecision);
++    if (!update_authorized_pcc_rule_and_qos(sess, SmPolicyDecision)) {
++        strerror = ogs_strdup("Invalid PCC tosTrafficClass");
++        goto cleanup;
++    }
+ 
+     ogs_assert(true == ogs_sbi_send_http_status_no_content(stream));
+ 
+diff --git a/tests/unit/abts-main.c b/tests/unit/abts-main.c
+index a00aa60..36d522a 100644
+--- a/tests/unit/abts-main.c
++++ b/tests/unit/abts-main.c
+@@ -38,6 +38,7 @@ abts_suite *test_sbi_message(abts_suite *suite);
+ abts_suite *test_security(abts_suite *suite);
+ abts_suite *test_nrf_discovery(abts_suite *suite);
+ abts_suite *test_crash(abts_suite *suite);
++abts_suite *test_dscp(abts_suite *suite);
+ 
+ const struct testlist {
+     abts_suite *(*func)(abts_suite *suite);
+@@ -51,6 +52,7 @@ const struct testlist {
+     {test_security},
+     {test_nrf_discovery},
+     {test_crash},
++    {test_dscp},
+     {NULL},
+ };
+ 
+diff --git a/tests/unit/dscp-test.c b/tests/unit/dscp-test.c
+new file mode 100755
+index 0000000..bdf54b5
+--- /dev/null
++++ b/tests/unit/dscp-test.c
+@@ -0,0 +1,155 @@
++/* DSCP classification wire-format and packet-matching regression tests. */
++#include "ogs-nas-5gs.h"
++#include "ogs-pfcp.h"
++#include "ogs-sbi.h"
++#include "core/abts.h"
++
++static void dscp_wire_test(abts_case *tc, void *data)
++{
++    uint16_t value = 0;
++    ogs_pcc_rule_t policy = {0}, copied = {0};
++    OpenAPI_pcc_rule_t *sbi;
++    OpenAPI_flow_information_t *info;
++    ogs_ipfw_rule_t ipfw = {0};
++    ogs_nas_qos_rule_t in = {0}, out[OGS_NAS_MAX_NUM_OF_QOS_RULE] = {0};
++    ogs_nas_qos_rules_t encoded = {0};
++    ogs_pfcp_sdf_filter_t sdf = {0}, parsed = {0};
++    ogs_tlv_octet_t octet = {0};
++    unsigned char buffer[256];
++    int len;
++
++    ABTS_INT_EQUAL(tc, OGS_OK, ogs_flow_parse_tos("b8fc", &value));
++    ABTS_INT_EQUAL(tc, 0xb8fc, value);
++    ABTS_INT_EQUAL(tc, OGS_OK, ogs_flow_parse_tos("68FC", &value));
++    ABTS_INT_EQUAL(tc, OGS_OK, ogs_flow_parse_tos("00fc", &value));
++    ABTS_INT_EQUAL(tc, OGS_ERROR, ogs_flow_parse_tos("b800", &value));
++    ABTS_INT_EQUAL(tc, OGS_ERROR, ogs_flow_parse_tos("b8fg", &value));
++    ABTS_INT_EQUAL(tc, OGS_ERROR, ogs_flow_parse_tos("0xb8fc", &value));
++    ABTS_INT_EQUAL(tc, OGS_ERROR, ogs_flow_parse_tos("b8", &value));
++    ABTS_INT_EQUAL(tc, OGS_ERROR, ogs_flow_parse_tos(NULL, &value));
++
++    policy.id = ogs_strdup("test-dscp");
++    policy.num_of_flow = 1;
++    policy.flow[0].direction = OGS_FLOW_UPLINK_ONLY;
++    policy.flow[0].description = ogs_strdup("permit out tcp from 10.100.67.250 12165 to assigned");
++    policy.flow[0].tos_traffic_class_presence = true;
++    policy.flow[0].tos_traffic_class = 0xb8fc;
++    OGS_STORE_PCC_RULE(&copied, &policy);
++    ABTS_INT_EQUAL(tc, true, copied.flow[0].tos_traffic_class_presence);
++    sbi = ogs_sbi_build_pcc_rule(&copied, 1);
++    info = sbi->flow_infos->first->data;
++    ABTS_STR_EQUAL(tc, "b8fc", info->tos_traffic_class);
++    {
++        cJSON *json = OpenAPI_pcc_rule_convertToJSON(sbi);
++        OpenAPI_pcc_rule_t *roundtrip = OpenAPI_pcc_rule_parseFromJSON(json);
++        OpenAPI_flow_information_t *flow = roundtrip->flow_infos->first->data;
++        ABTS_STR_EQUAL(tc, "b8fc", flow->tos_traffic_class);
++        OpenAPI_pcc_rule_free(roundtrip);
++        cJSON_Delete(json);
++    }
++    ogs_sbi_free_pcc_rule(sbi);
++    OGS_PCC_RULE_FREE(&copied);
++
++    ABTS_INT_EQUAL(tc, OGS_OK, ogs_ipfw_compile_rule(&ipfw, policy.flow[0].description));
++    ipfw.tos_traffic_class_presence = true;
++    ipfw.tos_traffic_class = 0xb8fc;
++    ogs_ipfw_rule_swap(&ipfw);
++    ABTS_INT_EQUAL(tc, 0xb8fc, ipfw.tos_traffic_class);
++    in.identifier = 2;
++    in.code = OGS_NAS_QOS_CODE_CREATE_NEW_QOS_RULE;
++    in.num_of_packet_filter = 1;
++    in.pf[0].identifier = 1;
++    in.pf[0].direction = OGS_NAS_QOS_DIRECTION_UPLINK;
++    in.precedence = 1;
++    in.flow.identifier = 2;
++    ogs_pf_content_from_ipfw_rule(OGS_FLOW_UPLINK_ONLY, &in.pf[0].content, &ipfw, false);
++    len = ogs_nas_build_qos_rules(&encoded, &in, 1);
++    ABTS_INT_EQUAL(tc, OGS_OK, len);
++    ABTS_TRUE(tc, encoded.length > 0);
++    ABTS_INT_EQUAL(tc, 1, ogs_nas_parse_qos_rules(out, &encoded));
++    {
++        int last = out[0].pf[0].content.num_of_component - 1;
++        ABTS_INT_EQUAL(tc, OGS_PACKET_FILTER_TOS_TRAFFIC_CLASS_TYPE, out[0].pf[0].content.component[last].type);
++        ABTS_INT_EQUAL(tc, 0xb8, out[0].pf[0].content.component[last].tos.value);
++        ABTS_INT_EQUAL(tc, 0xfc, out[0].pf[0].content.component[last].tos.mask);
++    }
++    ogs_free(encoded.buffer);
++
++    sdf.fd = 1; sdf.ttc = 1;
++    sdf.flow_description = policy.flow[0].description;
++    sdf.flow_description_len = strlen(sdf.flow_description);
++    sdf.tos_traffic_class = 0xb8fc;
++    len = ogs_pfcp_build_sdf_filter(&octet, &sdf, buffer, sizeof(buffer));
++    ABTS_TRUE(tc, len > 0);
++    ABTS_INT_EQUAL(tc, len, ogs_pfcp_parse_sdf_filter(&parsed, &octet));
++    ABTS_INT_EQUAL(tc, 0xb8fc, parsed.tos_traffic_class);
++    ABTS_INT_EQUAL(tc, 0xb8, buffer[len-2]);
++    ABTS_INT_EQUAL(tc, 0xfc, buffer[len-1]);
++    OGS_PCC_RULE_FREE(&policy);
++}
++
++static void dscp_packet_test(abts_case *tc, void *data)
++{
++    ogs_pfcp_pdr_t pdr = {0};
++    ogs_pfcp_rule_t rule = {0};
++    uint8_t v4[40] = {0x45,0,0,40,0,0,0,0,64,6};
++    uint8_t v6[60] = {0x60,0,0,0,0,20,6,64};
++    int ipv6, mark, ecn;
++    const int marks[] = {46,26,0,8};
++    ogs_list_init(&pdr.rule_list);
++    ogs_list_add(&pdr.rule_list, &rule);
++    for (ipv6 = 0; ipv6 < 2; ipv6++) {
++        uint8_t *packet = ipv6 ? v6 : v4;
++        int plen = ipv6 ? sizeof(v6) : sizeof(v4);
++        int hlen = ipv6 ? 40 : 20;
++        ABTS_INT_EQUAL(tc, OGS_OK, ogs_ipfw_compile_rule(&rule.ipfw,
++            ipv6 ? "permit out tcp from 2001:db8::250 12165 to assigned" :
++                   "permit out tcp from 10.100.67.250 12165 to assigned"));
++        ogs_ipfw_rule_swap(&rule.ipfw);
++        rule.ipfw.tos_traffic_class_presence = true;
++        rule.ipfw.tos_traffic_class = 0xb8fc;
++        if (ipv6) {
++            inet_pton(AF_INET6, "2001:db8::8", packet+8);
++            inet_pton(AF_INET6, "2001:db8::250", packet+24);
++        } else {
++            inet_pton(AF_INET, "10.100.68.8", packet+12);
++            inet_pton(AF_INET, "10.100.67.250", packet+16);
++        }
++        packet[hlen] = 0xc0; packet[hlen+1] = 0x01;
++        packet[hlen+2] = 12165 >> 8; packet[hlen+3] = 12165 & 0xff;
++        packet[hlen+12] = 0x50;
++        for (mark=0;mark<4;mark++) for (ecn=0;ecn<4;ecn++) {
++            uint8_t tos = (marks[mark]<<2)|ecn;
++            ogs_pkbuf_t *buf = ogs_pkbuf_alloc(NULL, plen);
++            if (ipv6) { packet[0]=0x60|(tos>>4); packet[1]=tos<<4; }
++            else packet[1]=tos;
++            ogs_pkbuf_put_data(buf, packet, plen);
++            ABTS_INT_EQUAL(tc, mark==0,
++                ogs_pfcp_pdr_rule_find_by_packet(&pdr,buf)==&rule);
++            rule.ipfw.tos_traffic_class=0x68fc;
++            ABTS_INT_EQUAL(tc, mark==1,
++                ogs_pfcp_pdr_rule_find_by_packet(&pdr,buf)==&rule);
++            rule.ipfw.tos_traffic_class_presence=false;
++            ABTS_TRUE(tc, ogs_pfcp_pdr_rule_find_by_packet(&pdr,buf)==&rule);
++            rule.ipfw.tos_traffic_class_presence=true;
++            rule.ipfw.tos_traffic_class=0xb8fc;
++            if (mark==0) {
++                buf->data[hlen+3] ^= 1;
++                ABTS_TRUE(tc, ogs_pfcp_pdr_rule_find_by_packet(&pdr,buf)==NULL);
++                buf->data[hlen+3] ^= 1;
++                buf->data[ipv6?39:19] ^= 1;
++                ABTS_TRUE(tc, ogs_pfcp_pdr_rule_find_by_packet(&pdr,buf)==NULL);
++            }
++            ogs_pkbuf_free(buf);
++        }
++    }
++}
++
++abts_suite *test_dscp(abts_suite *suite)
++{
++    ogs_log_install_domain(&__ogs_pfcp_domain, "pfcp", OGS_LOG_ERROR);
++    suite = ADD_SUITE(suite)
++    abts_run_test(suite, dscp_wire_test, NULL);
++    abts_run_test(suite, dscp_packet_test, NULL);
++    return suite;
++}
+diff --git a/tests/unit/meson.build b/tests/unit/meson.build
+index 8d3f623..7bbf122 100644
+--- a/tests/unit/meson.build
++++ b/tests/unit/meson.build
+@@ -26,12 +26,13 @@ testunit_unit_sources = files('''
+     security-test.c
+     nrf-discovery-test.c
+     crash-test.c
++    dscp-test.c
+ '''.split())
+ 
+ testunit_unit_exe = executable('unit',
+     sources : testunit_unit_sources,
+     c_args : [testunit_core_cc_flags, sbi_cc_flags],
+-    dependencies : [libs1ap_dep,
++    dependencies : [libnas_5gs_dep, libpfcp_dep, libs1ap_dep,
+                     libgtp_dep,
+                     libngap_dep,
+                     libnas_eps_dep,

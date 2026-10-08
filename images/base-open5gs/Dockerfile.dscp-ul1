@@ -1,0 +1,10 @@
+FROM base-open5gs:v2.8.0
+COPY patches/ /tmp/open5gs-patches/
+RUN test "$(git -C /open5gs rev-parse HEAD)" = "157f611a530e292e40ec50f9d23f0ef5d4fcd6a6" \
+ && test -z "$(git -C /open5gs status --porcelain --untracked-files=no)" \
+ && cd /tmp/open5gs-patches && sha256sum -c SHA256SUMS \
+ && cd /open5gs && git apply --check /tmp/open5gs-patches/dscp-ul1.patch \
+ && git apply /tmp/open5gs-patches/dscp-ul1.patch \
+ && ninja -j3 -C build \
+ && meson test -C build --suite unit --print-errorlogs \
+ && ninja -C build install
